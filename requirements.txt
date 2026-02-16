@@ -1,0 +1,9 @@
+streamlit>=1.37.0
+pandas>=2.1.0
+numpy>=1.26.0
+plotly>=5.20.0
+statsmodels>=0.14.0
+python-dateutil
+pytz
+requests
+Pillow

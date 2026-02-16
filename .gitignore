@@ -179,3 +179,8 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+App_Data/*.parquet
+App_Data/*.json
+App_Data/*.csv
+App_Data/__pycache__/

@@ -248,6 +248,29 @@ def strava_json_to_dataframe(activities: list[dict]) -> pd.DataFrame:
 
     return pd.DataFrame(rows)
 
+# =========================
+# Strava local cache (Parquet)
+# =========================
+STRAVA_PARQUET_PATH = Path("App_Data") / "strava_activities.parquet"
+STRAVA_PARQUET_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+def _load_strava_parquet() -> pd.DataFrame | None:
+    """Load cached Strava activities from parquet, if available."""
+    try:
+        if STRAVA_PARQUET_PATH.exists():
+            return pd.read_parquet(STRAVA_PARQUET_PATH)
+    except Exception:
+        return None
+    return None
+
+def _save_strava_parquet(df: pd.DataFrame) -> None:
+    """Save Strava activities dataframe to parquet (best-effort)."""
+    try:
+        if df is not None and not df.empty:
+            df.to_parquet(STRAVA_PARQUET_PATH, index=False)
+    except Exception:
+        # If parquet engine missing (pyarrow), we silently skip
+        pass
 
 # =========================
 # App Config
@@ -1209,17 +1232,37 @@ st.sidebar.header("📥 Data source")
 st.sidebar.caption("Data is integrated via Strava API + Garmin dump data for Steps.")
 
 raw = None
-
 refresh_clicked = st.sidebar.button("🔄 Fetch latest from Strava")
 
-# Always fetch ALL available history (no 'after' filter)
-if "api_activities" not in st.session_state or refresh_clicked:
-    with st.spinner("Fetching activities from Strava…"):
-        acts_json = fetch_strava_activities_json(after=None, max_pages=50)
-        st.session_state["api_activities"] = acts_json
+# 1) Try parquet first (fast + works even if API fails), unless refresh requested
+if ("raw_activities_df" not in st.session_state) and (not refresh_clicked):
+    cached_df = _load_strava_parquet()
+    if cached_df is not None and not cached_df.empty:
+        st.session_state["raw_activities_df"] = cached_df
 
-acts_json = st.session_state.get("api_activities", [])
-raw = strava_json_to_dataframe(acts_json)
+# 2) If refresh OR no cached df in session, fetch from API and overwrite parquet
+if ("raw_activities_df" not in st.session_state) or refresh_clicked:
+    try:
+        with st.spinner("Fetching activities from Strava…"):
+            acts_json = fetch_strava_activities_json(after=None, max_pages=50)
+            fresh_df = strava_json_to_dataframe(acts_json)
+
+        # Save parquet for stability / offline fallback
+        _save_strava_parquet(fresh_df)
+        st.session_state["raw_activities_df"] = fresh_df
+
+    except Exception as e:
+        # API failed → fallback to parquet (if exists)
+        fallback_df = _load_strava_parquet()
+        if fallback_df is not None and not fallback_df.empty:
+            st.warning("Strava API fetch failed. Loaded cached parquet data instead.")
+            st.session_state["raw_activities_df"] = fallback_df
+        else:
+            st.error(f"Strava API fetch failed and no parquet cache found.\n\nError: {e}")
+            st.stop()
+
+raw = st.session_state.get("raw_activities_df")
+
 
 if raw is None or raw.empty:
     st.warning("No activities returned from Strava. Check API credentials or try refresh.")

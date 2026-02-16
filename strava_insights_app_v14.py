@@ -115,8 +115,8 @@ def _steps_summary_cache_key(path: Path) -> float:
 
 @st.cache_data(show_spinner=False)
 def load_steps_summary(cache_key: int) -> dict | None:
-    base = Path(__file__).parent  # App_Data folder
-    path = base / "demo_garmin_steps_summary.json"
+    repo_root = Path(__file__).resolve().parent
+    path = repo_root / "App_Data" / "demo_garmin_steps_summary.json"
     if not path.exists():
         return None
     try:
@@ -1448,9 +1448,10 @@ Enjoy the journey — numbers tell *what*, stories tell *why*, and together they
 
 with tab_steps:
     st.subheader("👣 Steps (data from Garmin) – Story on a Globe")
-    base = Path(__file__).parent
-    json_path = base / "demo_garmin_steps_summary.json"
-    steps_summary = load_steps_summary(_steps_summary_cache_key(json_path))
+    repo_root = Path(__file__).resolve().parent
+    json_path = repo_root / "App_Data" / "demo_garmin_steps_summary.json"
+    steps_summary = load_steps_summary(json_path)
+
     # st.write("DEBUG total_days:", steps_summary.get("total_days") if steps_summary else None)
     # st.write("DEBUG range:", steps_summary.get("range_start"), steps_summary.get("range_end"))
 

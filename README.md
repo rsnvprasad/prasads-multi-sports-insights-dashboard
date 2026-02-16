@@ -1,30 +1,26 @@
 # 🚴‍♂️ Prasad’s Multi-Sports Insights Dashboard
 
-A premium **Streamlit fitness analytics dashboard** combining:
+A story-driven fitness analytics dashboard built using **Streamlit**, combining:
 
-- **Strava activity history**
-- **Garmin steps summary**
-- Beautiful storytelling + visual insights
-
-This project showcases my journey across:
-
-🚴 Cycling • 🏃 Running • 🚶 Walking • 🧘 Yoga • 🏊 Swimming
+- **Strava API activity insights**
+- **Garmin historical health & steps data**
+- **Year-wise + overall statistics**
+- **NASA-inspired interactive globe visuals**
 
 ---
 
 ## 🌟 Project Highlights
 
-✅ Multi-tab interactive dashboard  
 ✅ Year-wise + overall statistics  
 ✅ Story-driven fitness insights  
 ✅ Longest activity streak + consistency tracking  
 ✅ Garmin + Strava integration  
-✅ Personal “About Me” tab with journey narrative  
+✅ Personal “About Me” narrative tab  
 ✅ NASA globe credit integration for Steps tab  
 
 ---
 
-## 📊 Tabs Included
+## 📌 Tabs Included
 
 1. 👣 Steps (Garmin Story Globe)  
 2. 🚴 Cycling  
@@ -32,22 +28,24 @@ This project showcases my journey across:
 4. 🚶 Walking  
 5. 🧘 Yoga / Strength  
 6. 🏊 Swimming  
-7. 📈 All Sports Summary  
+7. 📊 All Sports Summary  
 8. 👋 About Me & Dashboard Story  
 
 ---
 
-## 🚀 Live Dashboard (Streamlit Cloud)
+## 🌐 Live Dashboard (Streamlit Cloud)
 
-Once deployed, the app will be available here:
+Once deployed, the dashboard will be available here:
 
-👉 **[Streamlit App Link Coming Soon]**
+👉 **Streamlit App Link Coming Soon**
+
+(Replace with your real link after deployment)
 
 ---
 
 ## ⚙️ Installation & Run Locally
 
-### 1️⃣ Clone the repository
+### 1️⃣ Clone the Repository
 
 ```bash
 git clone https://github.com/rsnvprasad/prasads-multi-sports-insights-dashboard.git

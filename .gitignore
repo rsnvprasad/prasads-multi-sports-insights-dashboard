@@ -191,3 +191,5 @@ data/
 *.csv
 *.json
 *.zip
+
+.streamlit/secrets.toml

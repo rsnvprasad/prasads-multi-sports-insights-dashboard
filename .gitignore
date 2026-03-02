@@ -184,3 +184,10 @@ App_Data/*.parquet
 App_Data/*.json
 App_Data/*.csv
 App_Data/__pycache__/
+
+# Local runtime / personal datasets (do not commit)
+data/
+*.parquet
+*.csv
+*.json
+*.zip

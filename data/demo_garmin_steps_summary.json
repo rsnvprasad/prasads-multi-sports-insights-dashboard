@@ -1,0 +1,18 @@
+{
+  "generated_on": "2026-02-28T00:05:59.686942",
+  "last_updated": "2026-02-26",
+  "range_start": "2018-05-05",
+  "range_end": "2026-02-26",
+  "total_days": 2855,
+  "total_steps": 37750068,
+  "current_10k_streak_days": 556,
+  "max_10k_streak_days": 1022,
+  "distance_from_steps_km_estimated": 28707.3,
+  "assumed_steps_per_km": 1315,
+  "total_distance_km_garmin_all_movement": 0.0,
+  "earth_diameters_equivalent": 2.25,
+  "times_around_earth": 0.72,
+  "best_day_steps": 53555,
+  "best_month_steps": 665614,
+  "best_year_steps": 5822843
+}

@@ -30,6 +30,8 @@ import requests
 from textwrap import dedent
 from PIL import Image
 
+import time
+
 def _html(s: str) -> str:
     """Dedent + strip + remove ALL leading whitespace per line (prevents Markdown code blocks)."""
     s = dedent(s).strip("\n")
@@ -114,11 +116,17 @@ def _steps_summary_cache_key(path: Path) -> float:
 
 
 @st.cache_data(show_spinner=False)
-def load_steps_summary(cache_key: int) -> dict | None:
-    repo_root = Path(__file__).resolve().parent
-    path = repo_root / "App_Data" / "demo_garmin_steps_summary.json"
+def load_steps_summary(path_str: str, cache_key: float) -> dict | None:
+    """
+    Load the Garmin steps summary JSON from a given path.
+    cache_key is used only to invalidate cache when the file changes.
+    """
+    _ = cache_key  # cache invalidation key (intentionally unused)
+
+    path = Path(path_str)
     if not path.exists():
         return None
+
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
@@ -146,13 +154,19 @@ def get_strava_access_token() -> str:
     return resp.json()["access_token"]
 
 
-@st.cache_data(show_spinner=True)
+@st.cache_data(show_spinner=True, ttl=60)
 def fetch_strava_activities_json(
     before: int | None = None,
     after: int | None = None,
     max_pages: int = 10,
     per_page: int = 200,
+    cache_buster: int | None = None,  # ✅ Added
 ) -> list[dict]:
+
+    # cache_buster is intentionally unused.
+    # It forces Streamlit to treat each refresh as a new call.
+    _ = cache_buster
+
     access_token = get_strava_access_token()
     headers = {"Authorization": f"Bearer {access_token}"}
 
@@ -273,6 +287,31 @@ def _save_strava_parquet(df: pd.DataFrame) -> None:
         pass
 
 # =========================
+# Cache freshness helpers
+# =========================
+CACHE_MAX_AGE_HOURS = 6
+
+def _parquet_cache_age_hours() -> float | None:
+    """
+    Returns cache age in hours if parquet exists, else None.
+    """
+    try:
+        if STRAVA_PARQUET_PATH.exists():
+            mtime = STRAVA_PARQUET_PATH.stat().st_mtime  # seconds
+            age_sec = (time.time() - mtime)
+            return age_sec / 3600.0
+    except Exception:
+        return None
+    return None
+
+def _parquet_is_stale(max_age_hours: float = CACHE_MAX_AGE_HOURS) -> bool:
+    age = _parquet_cache_age_hours()
+    if age is None:
+        # no cache file (or error) => treat as stale so we fetch once
+        return True
+    return age > max_age_hours
+
+# =========================
 # App Config
 # =========================
 st.set_page_config(page_title="Strava Insights – Multi-Sport", layout="wide")
@@ -280,6 +319,21 @@ st.set_page_config(page_title="Strava Insights – Multi-Sport", layout="wide")
 st.markdown(
     """
 <style>
+
+/* ===== Section Divider (reliable) ===== */
+.soft-divider{
+  height: 1px;
+  width: 100%;
+  background: rgba(255,255,255,0.14);
+  margin: 18px 0 14px;
+  border-radius: 1px;
+}
+
+@media (prefers-color-scheme: light){
+  .soft-divider{
+    background: rgba(49,51,63,0.18);
+  }
+}
 
 .quote-box{
   margin-top: 12px;
@@ -290,6 +344,15 @@ st.markdown(
 
   /* ⭐ Premium finishing touch */
   box-shadow: 0 8px 22px rgba(0,0,0,0.25);
+}
+
+/* ===== Number highlight (global) ===== */
+.num-highlight{
+  font-weight: 800;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  padding: 2px 6px;
+  border-radius: 6px;
 }
 
 .quote-text{
@@ -350,6 +413,22 @@ st.markdown(
   margin-top: 6px;
 }
 
+/* KPI Section Frame (for KPI rows in all tabs) */
+/* KPI Section Frame (clean, no box) */
+.kpi-frame{
+  border: none !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin: 12px 0 16px 0;
+}
+
+/* ===== KPI Hover Premium Effect ===== */
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px rgba(255,255,255,0.08);
+  transition: all 0.2s ease;
+}
 
 [data-testid="stMetricLabel"] > div {
   font-size: 0.83rem;
@@ -418,14 +497,10 @@ hr { margin-top: 0.6rem !important; margin-bottom: 0.6rem !important; }
   width: 86px;
   height: 86px;
   border-radius: 50%;
-  background: conic-gradient(
-    #f59e0b 0 var(--p),
-    rgba(49, 51, 63, 0.10) var(--p) 100%
-  );
+  position: relative;
   display: grid;
   place-items: center;
 }
-
 
 .steps-ring::before {
   content: "";
@@ -434,13 +509,17 @@ hr { margin-top: 0.6rem !important; margin-bottom: 0.6rem !important; }
   border-radius: 50%;
   background: rgba(255,255,255,0.85);
   border: 1px solid rgba(49, 51, 63, 0.08);
+  z-index: 1;
 }
 
 .steps-ring-text {
   position: absolute;
-  text-align: center;
+  inset: 0;
+  display: grid;
+  place-items: center;
   font-weight: 800;
   font-size: 1.05rem;
+  z-index: 2;
 }
 
 .steps-ring-sub {
@@ -473,16 +552,20 @@ hr { margin-top: 0.6rem !important; margin-bottom: 0.6rem !important; }
     border-color: rgba(255,255,255,0.10) !important;
   }
 
-  .steps-ring {
-    background: conic-gradient(
-      #f59e0b 0 var(--p),
-      rgba(255,255,255,0.14) var(--p) 100%
-    ) !important;
-  }
 
   .steps-ring::before {
     background: rgba(0,0,0,0.55) !important;
     border-color: rgba(255,255,255,0.12) !important;
+  }
+
+
+  /* ===== Number Highlight Style ===== */
+  .num-highlight {
+      font-weight: 800;
+      color: #f59e0b;
+      background: rgba(245, 158, 11, 0.12);
+      padding: 2px 6px;
+      border-radius: 6px;
   }
 }
 </style>
@@ -514,6 +597,9 @@ SPORT_ALIASES = {
     "Workout": ["workout", "yoga", "weight training", "crossfit"],
     "Other": [],
 }
+
+def soft_divider():
+    st.markdown('<div class="soft-divider"></div>', unsafe_allow_html=True)
 
 def compute_activity_day_stats(data: pd.DataFrame):
     """
@@ -711,7 +797,7 @@ def build_cycling_lifestyle_story(cyc_all: pd.DataFrame, cyc_view: pd.DataFrame)
         recency_line = f"• Last recorded ride: <b>{last_dt.date()}</b> (~{months_since} months ago). Weather seasons change, but not the cyclist mindset, my bike always looks at me to go for a ride. Ha ha :-)."
     else:
         if comm_share >= 50:
-            headline = "You didn’t just ride — you chose a cleaner way to move"
+            headline = "I didn’t just ride — I chose a cleaner way to move"
         else:
             headline = "Cycling as a lifestyle — strength, freedom, and wellbeing"
         recency_line = f"• Last recorded ride: <b>{last_dt.date()}</b>." if pd.notna(last_dt) else "Last recorded ride: <b>—</b>."
@@ -720,31 +806,56 @@ def build_cycling_lifestyle_story(cyc_all: pd.DataFrame, cyc_view: pd.DataFrame)
     if comm_share >= 60:
         badge_line = "🚴 <b>Commute Champion of self:</b> Most of my rides powered daily life, not just workouts.<br/>"
 
+    ##
+    # Helper: highlight numbers in story text
+    def nh(s: str) -> str:
+        return f"<span class='num-highlight'>{s}</span>"
+
+    total_km_s   = f"{total_km:,.0f} km"
+    total_rides_s= f"{total_rides:,}"
+    earth_rounds_s = f"{earth_rounds:,.2f}"
+    moon_pct_s   = f"{moon_pct:,.1f}%"
+
+    comm_km_s    = f"{comm_km:,.0f} km"
+    comm_rides_s = f"{comm_rides:,}"
+    nonc_km_s    = f"{nonc_km:,.0f} km"
+    nonc_rides_s = f"{nonc_rides:,}"
+
+    comm_share_s = f"{comm_share:,.0f}%"
+    carbon_s     = f"{carbon_kg:,.1f} kg CO₂"
+
+    half_century_s = f"{half_century_count:,}"
+    century_s      = f"{century_count:,}"
+    best_ride_s    = f"{best_ride:,.0f} km"
+    top_year_km_s  = f"{top_year_km:,.0f} km"
+    total_hours_s  = f"{total_hours:,.0f} hrs"
+
+    top3_s = ", ".join([f"{x:.0f} km" for x in top3_rides])
+    ##
+
     body_html = (
         badge_line +
-        f"• Overall mileage: <b>{total_km:,.0f} km</b> across <b>{total_rides:,}</b> rides<br/>"
-        f"🌍 <b>Earth rounds:</b> {earth_rounds:,.2f} times around Earth<br/>"
-        f"🌕 <b>Earth → Moon journey:</b> {moon_pct:,.1f}% completed<br/>"
+        f"• Overall mileage: {nh(total_km_s)} across {nh(total_rides_s)} rides<br/>"
+        f"🌍 <b>Earth rounds:</b> {nh(earth_rounds_s)} times around Earth<br/>"
+        f"🌕 <b>Earth → Moon journey:</b> {nh(moon_pct_s)} completed<br/>"
 
-        f"• Commute: <b>{comm_km:,.0f} km</b> ({comm_rides:,} rides)<br/> "
-        f"• Non-commute: <b>{nonc_km:,.0f} km</b> ({nonc_rides:,} rides)<br/>"
+        f"• Commute: {nh(comm_km_s)} ({nh(comm_rides_s)} rides)<br/>"
+        f"• Non-commute: {nh(nonc_km_s)} ({nh(nonc_rides_s)} rides)<br/>"
 
-        f"• Commute share is <b>{comm_share:,.0f}%</b> of my cycling distance. Since, I believe that, where there is a will, there is a way. Super proud of my commutes<br/>"
+        f"• Commute share is {nh(comm_share_s)} of my cycling distance. "
+        f"Since, I believe that, where there is a will, there is a way. Super proud of my commutes<br/>"
 
-        f"• Estimated carbon saved is <b>{carbon_kg:,.1f} kg CO₂</b> {trees_line}. When we cannot create our nature, then we can only conserve it. Hence, doing my bit to conserve our mother nature and preserving for our next generations.<br/><br/>"
+        f"• Estimated carbon saved is {nh(carbon_s)} {trees_line}. "
+        f"When we cannot create our nature, then we can only conserve it. Hence, doing my bit to conserve our mother nature and preserving for our next generations.<br/><br/>"
 
-        #f"(≈ planting <b>{trees_equiv:,.0f} trees</b>) 🌳<br/><br/>"
-        
-
-        f"🏆 <b>Half-century rides (50+ km):</b> {half_century_count:,}<br/>"
-        f"🏅 <b>Century rides (100+ km):</b> {century_count:,}<br/>"
-        f"🚀 <b>Best ride:</b> {best_ride:,.0f} km<br/>"
-        f"🏅 <b>Top 3 rides:</b> {top3_rides[0]:.0f} km, {top3_rides[1]:.0f} km, {top3_rides[2]:.0f} km<br/>"
-        f"📅 <b>Most active year:</b> {top_year} ({top_year_km:,.0f} km)<br/>"
-        f"⏱️ <b>Total time on bike saddle:</b> {total_hours:,.0f} hrs<br/><br/>"
+        f"🏆 <b>Half-century rides (50+ km):</b> {nh(half_century_s)}<br/>"
+        f"🏅 <b>Century rides (100+ km):</b> {nh(century_s)}<br/>"
+        f"🚀 <b>Best ride:</b> {nh(best_ride_s)}<br/>"
+        f"🏅 <b>Top 3 rides:</b> {nh(top3_s)}<br/>"
+        f"📅 <b>Most active year:</b> {top_year} ({nh(top_year_km_s)})<br/>"
+        f"⏱️ <b>Total time on bike saddle:</b> {nh(total_hours_s)}<br/><br/>"
         f"✨ That’s thousands of hours invested into health, discipline, and freedom.<br/><br/>"
         f"{recency_line}<br/>"
-        #f"Current selection: <b>{view_km:,.0f} km</b> • <b>{view_rides:,}</b> rides"
     )
 
 
@@ -762,8 +873,16 @@ def build_cycling_lifestyle_story(cyc_all: pd.DataFrame, cyc_view: pd.DataFrame)
 
     return {"headline": headline, "body_html": body_html, "footer": footer}
 
+from contextlib import contextmanager
+
+@contextmanager
+def kpi_frame():
+    st.markdown("<div class='kpi-frame'>", unsafe_allow_html=True)
+    yield
+    st.markdown("</div>", unsafe_allow_html=True)
 
 def kpi_card(label, value, help_text=None):
+    # Plain metric (no box around each KPI)
     st.metric(label, value, help=help_text)
 
 
@@ -774,14 +893,69 @@ def generic_time_series(
     show_monthly: bool = True,
     show_distance: bool = True,
     show_elevation: bool = True,
+    granularity: str = "month",   # "month" or "year"
 ):
-    if df.empty:
+    if df is None or df.empty:
         st.warning(f"No data to plot for {sport_name}.")
         return
 
     df = df.copy()
     base_key = (key_prefix or sport_name).lower().replace(" ", "_")
 
+    # Ensure datetime
+    if "Activity Date" in df.columns:
+        df["Activity Date"] = pd.to_datetime(df["Activity Date"], errors="coerce")
+
+    # -------------------------
+    # YEARLY aggregation
+    # -------------------------
+    if granularity.lower() == "year":
+        if "Year" not in df.columns:
+            df["Year"] = df["Activity Date"].dt.year
+
+        yearly = (
+            df.groupby("Year")
+              .agg(
+                  Rides=("Activity ID", "count"),
+                  Distance_km=("Distance", "sum"),
+                  Elevation_m=("Elevation Gain", "sum"),
+              )
+              .reset_index()
+              .sort_values("Year")
+        )
+
+        if show_monthly:
+            fig1 = px.bar(
+                yearly, x="Year", y="Rides",
+                title=f"{sport_name} – Yearly activities count",
+                labels={"Rides": "Count", "Year": "Year"},
+            )
+            fig1.update_xaxes(title_text="Year", type="category")
+            st.plotly_chart(fig1, use_container_width=True, key=f"{base_key}_yearly_count")
+
+        if show_distance:
+            fig2 = px.line(
+                yearly, x="Year", y="Distance_km",
+                title=f"{sport_name} – Distance over time (km) (Yearly)",
+                labels={"Distance_km": "Distance (km)", "Year": "Year"},
+            )
+            fig2.update_xaxes(title_text="Year", type="category")
+            st.plotly_chart(fig2, use_container_width=True, key=f"{base_key}_yearly_distance")
+
+        if show_elevation:
+            fig3 = px.line(
+                yearly, x="Year", y="Elevation_m",
+                title=f"{sport_name} – Elevation Gain over time (m) (Yearly)",
+                labels={"Elevation_m": "Elevation (m)", "Year": "Year"},
+            )
+            fig3.update_xaxes(title_text="Year", type="category")
+            st.plotly_chart(fig3, use_container_width=True, key=f"{base_key}_yearly_elevation")
+
+        return
+
+    # -------------------------
+    # MONTHLY aggregation (fill missing months)
+    # -------------------------
     if "MonthPeriod" not in df.columns:
         df["MonthPeriod"] = pd.to_datetime(df["Activity Date"], errors="coerce").dt.to_period("M")
 
@@ -795,34 +969,61 @@ def generic_time_series(
           .reset_index()
           .sort_values("MonthPeriod")
     )
-    monthly["Month"] = monthly["MonthPeriod"].astype(str)
 
-    # 1) Monthly count
+    if monthly.empty:
+        st.info(f"No monthly data available for {sport_name}.")
+        return
+
+    # Fill missing months
+    full_periods = pd.period_range(monthly["MonthPeriod"].min(), monthly["MonthPeriod"].max(), freq="M")
+    monthly = (
+        monthly.set_index("MonthPeriod")
+              .reindex(full_periods, fill_value=0)
+              .rename_axis("MonthPeriod")
+              .reset_index()
+    )
+
+    # Use datetime for Plotly date axis
+    monthly["MonthDate"] = monthly["MonthPeriod"].dt.to_timestamp()
+
+    # ---- Monthly activities count ----
     if show_monthly:
         fig1 = px.bar(
-            monthly, x="Month", y="Rides",
+            monthly, x="MonthDate", y="Rides",
             title=f"{sport_name} – Monthly activities count",
-            labels={"Rides": "Count"},
+            labels={"Rides": "Count", "MonthDate": "Month"},
+        )
+        fig1.update_xaxes(
+            title_text="Month",
+            type="date",
+            dtick="M2",
+            tickformat="%b\n%Y",
         )
         st.plotly_chart(fig1, use_container_width=True, key=f"{base_key}_monthly_count")
 
-    # 2) Distance over time
+    # ---- Distance over time ----
     if show_distance:
         fig2 = px.line(
-            monthly, x="Month", y="Distance_km",
+            monthly, x="MonthDate", y="Distance_km",
             title=f"{sport_name} – Distance over time (km)",
-            labels={"Distance_km": "Distance (km)"},
+            labels={"Distance_km": "Distance (km)", "MonthDate": "Month"},
         )
+        fig2.update_xaxes(title_text="Month", type="date", dtick="M2", tickformat="%b\n%Y")
         st.plotly_chart(fig2, use_container_width=True, key=f"{base_key}_distance_over_time")
 
-    # 3) Elevation over time
+    # ---- Elevation over time ----
     if show_elevation:
         fig3 = px.line(
-            monthly, x="Month", y="Elevation_m",
+            monthly, x="MonthDate", y="Elevation_m",
             title=f"{sport_name} – Elevation Gain covered over time (m)",
-            labels={"Elevation_m": "Elevation (m)"},
+            labels={"Elevation_m": "Elevation (m)", "MonthDate": "Month"},
         )
+        fig3.update_xaxes(title_text="Month", type="date", dtick="M2", tickformat="%b\n%Y")
         st.plotly_chart(fig3, use_container_width=True, key=f"{base_key}_elevation_over_time")
+
+        return
+
+   
 
 
 
@@ -830,29 +1031,37 @@ def generic_time_series(
 def distance_distribution(df: pd.DataFrame, sport_name: str):
     if df.empty:
         return
+
     base_key = sport_name.lower().replace(" ", "_")
 
+    # ✅ Clean distance: numeric + remove negatives
+    dfx = df.copy()
+    dfx["Distance"] = pd.to_numeric(dfx["Distance"], errors="coerce")
+    dfx = dfx[dfx["Distance"].notna()]
+    dfx["Distance"] = dfx["Distance"].clip(lower=0)
+
+    if dfx.empty:
+        st.info(f"No valid distance data for {sport_name}.")
+        return
+
+    max_x = float(dfx["Distance"].max())
+
     fig = px.histogram(
-        df,
+        dfx,
         x="Distance",
         nbins=40,
-        title=f"{sport_name} – Distance Distribution over number of activties (km)",
-        labels={
-            "Distance": "Distance (Km)",
-            "count": "Number of rides"
-        }
+        title=f"{sport_name} – Distance Distribution over number of activities (km)",
+        labels={"Distance": "Distance (km)", "count": "Number of activities"},
+    )
+
+    # ✅ Make axis nice + prevent negative range
+    fig.update_xaxes(
+        range=[0, max_x],
+        tickmode="linear",
+        dtick=5,
     )
 
     st.plotly_chart(fig, use_container_width=True, key=f"{base_key}_distance_hist")
-
-    # ✅ Increase number of X-axis tick marks
-    fig.update_xaxes(
-        tickmode="linear",
-        dtick=5   # show tick every 5 km
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-
 
 
 def commute_split(df: pd.DataFrame, sport_name: str):
@@ -1226,33 +1435,57 @@ def render_earth_moon_journey(
 
 
 # =========================
-# Sidebar – Data Source (Simplified)
+# Sidebar – Data Source (Auto-refresh if cache stale)
 # =========================
 st.sidebar.header("📥 Data source")
 st.sidebar.caption("Data is integrated via Strava API + Garmin dump data for Steps.")
 
-raw = None
 refresh_clicked = st.sidebar.button("🔄 Fetch latest from Strava")
 
-# 1) Try parquet first (fast + works even if API fails), unless refresh requested
-if ("raw_activities_df" not in st.session_state) and (not refresh_clicked):
+# Cache status (for user visibility)
+cache_exists = STRAVA_PARQUET_PATH.exists()
+cache_age = _parquet_cache_age_hours() if cache_exists else None
+auto_refresh_needed = _parquet_is_stale(CACHE_MAX_AGE_HOURS)
+
+if not cache_exists:
+    st.sidebar.info("📁 Cache: not found (will fetch from Strava)")
+else:
+    st.sidebar.caption(f"🕒 Cache age: {cache_age:.1f} hours" if cache_age is not None else "🕒 Cache age: unknown")
+
+# Treat auto-refresh same as refresh (but softer: no full cache clear)
+refresh_mode = refresh_clicked or auto_refresh_needed
+
+# If user manually refreshes, clear Streamlit cache too
+if refresh_clicked:
+    st.cache_data.clear()
+    st.session_state.pop("raw_activities_df", None)
+
+# If auto-refresh needed, drop session raw so we fetch fresh once
+if auto_refresh_needed and ("raw_activities_df" in st.session_state):
+    st.session_state.pop("raw_activities_df", None)
+    st.sidebar.info("Auto-refreshing from Strava (cache older than 6 hours)…")
+
+# 1) Try parquet first (fast + works even if API fails), unless refresh_mode requested
+if ("raw_activities_df" not in st.session_state) and (not refresh_mode):
     cached_df = _load_strava_parquet()
     if cached_df is not None and not cached_df.empty:
         st.session_state["raw_activities_df"] = cached_df
 
-# 2) If refresh OR no cached df in session, fetch from API and overwrite parquet
-if ("raw_activities_df" not in st.session_state) or refresh_clicked:
+# 2) If refresh_mode OR no cached df in session, fetch from API and overwrite parquet
+if ("raw_activities_df" not in st.session_state) or refresh_mode:
     try:
         with st.spinner("Fetching activities from Strava…"):
-            acts_json = fetch_strava_activities_json(after=None, max_pages=50)
+            acts_json = fetch_strava_activities_json(
+                after=None,
+                max_pages=50,
+                cache_buster=int(time.time()),  # forces truly fresh API fetch
+            )
             fresh_df = strava_json_to_dataframe(acts_json)
 
-        # Save parquet for stability / offline fallback
         _save_strava_parquet(fresh_df)
         st.session_state["raw_activities_df"] = fresh_df
 
     except Exception as e:
-        # API failed → fallback to parquet (if exists)
         fallback_df = _load_strava_parquet()
         if fallback_df is not None and not fallback_df.empty:
             st.warning("Strava API fetch failed. Loaded cached parquet data instead.")
@@ -1262,13 +1495,36 @@ if ("raw_activities_df" not in st.session_state) or refresh_clicked:
             st.stop()
 
 raw = st.session_state.get("raw_activities_df")
-
-
 if raw is None or raw.empty:
     st.warning("No activities returned from Strava. Check API credentials or try refresh.")
     st.stop()
 
 data = parse_activities_cached(raw)
+
+# =========================
+# Diagnostics (helps catch missing activities / caching issues)
+# =========================
+# with st.sidebar.expander("🧪 Diagnostics", expanded=False):
+#     try:
+#         raw_max = pd.to_datetime(raw["Activity Date"], errors="coerce").max()
+#         data_max = pd.to_datetime(data["Activity Date"], errors="coerce").max()
+
+#         st.write("**Raw (from Strava/parquet) rows:**", len(raw))
+#         st.write("**Parsed (after processing) rows:**", len(data))
+#         st.write("**Raw max Activity Date:**", raw_max)
+#         st.write("**Parsed max Activity Date:**", data_max)
+
+#         st.markdown("**Raw counts by Activity Type**")
+#         if "Activity Type" in raw.columns:
+#             st.dataframe(raw["Activity Type"].value_counts().rename("count"))
+
+#         st.markdown("**Parsed counts by Sport**")
+#         if "Sport" in data.columns:
+#             st.dataframe(data["Sport"].value_counts().rename("count"))
+
+#     except Exception as e:
+#         st.warning(f"Diagnostics error: {e}")
+
 total_active_days, longest_streak = compute_activity_day_stats(data)
 # --- Convert days into approximate years ---
 active_years = total_active_days / 365.0
@@ -1276,47 +1532,45 @@ streak_years = longest_streak / 365.0
 
 
 
-
-
 # =========================
-# Filters (Simplified – keep YEAR)
+# Filters (Keep ONLY YEAR)
 # =========================
-st.sidebar.header("🔎 Filters")
+st.sidebar.header("🔎 Filter (for Sport Tabs only)")
 
-available_sports = sorted(data["Sport"].unique().tolist())
-sport_selection = st.sidebar.multiselect(
-    "Select Sports",
-    available_sports,
-    default=available_sports,
+# ✅ Keep Year filter (Current year by default)
+from datetime import datetime
+
+years = sorted(data["Year"].dropna().unique().tolist())
+year_options = ["All"] + years
+
+current_year = datetime.now().year
+default_index = year_options.index(current_year) if current_year in years else 0
+
+year_selection = st.sidebar.selectbox(
+    "Year",
+    year_options,
+    index=default_index
 )
 
-# ✅ Keep Year filter (All + individual years)
-years = sorted(data["Year"].dropna().unique().tolist())
-year_selection = st.sidebar.selectbox("Year", ["All"] + years, index=0)
+# ✅ No sports filter (tabs already separate them)
+df_all_years = data.copy()   # for charts / trends (no year filter)
+df = df_all_years.copy()     # for KPIs / quick views (year filter applies)
 
-# Always respect Sports selection
-df_all_years = data[data["Sport"].isin(sport_selection)].copy()   # ✅ for charts (no Year filter)
-
-# Stats / counts respond to Year selection
-df = df_all_years.copy()                                          # ✅ for KPIs / quick views
 if year_selection != "All":
     df = df[df["Year"] == year_selection].copy()
-
 
 # Header range (informational only)
 hdr_start = pd.to_datetime(df["Activity Date"]).min().date() if len(df) else None
 hdr_end = pd.to_datetime(df["Activity Date"]).max().date() if len(df) else None
 
-st.success(f"Loaded **{len(df):,}** activities from **{len(data):,}** total after filters.")
+st.success(f"Loaded **{len(df):,}** activities from **{len(data):,}** total (Year filter applied to KPIs).")
 
 with st.container():
     st.markdown("##### Current Selection")
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
     with c1:
-        st.write(f"**Sports:** {', '.join(sport_selection) if sport_selection else '—'}")
-    with c2:
         st.write(f"**Year:** {year_selection}")
-    with c3:
+    with c2:
         st.write(f"**Date:** {hdr_start} → {hdr_end}" if hdr_start and hdr_end else "**Date:** —")
 
 
@@ -1385,6 +1639,96 @@ with tab_about:
         else:
             st.info("📷 Please place `my_photo.jpg` inside App_Data/vendor/")
 
+        # =========================
+        # ✅ NEW: Latest Day Activity Proof (freshness indicator)
+        # =========================
+        st.divider()
+        st.subheader("📅 Latest activity(-ies) in my day to day journey")
+
+        # Activity Date is already parsed; still keep robust conversion
+        _dt = pd.to_datetime(data["Activity Date"], errors="coerce")
+        last_ts = _dt.max()
+
+        if pd.isna(last_ts):
+            st.info("No valid activity dates found yet in the dataset.")
+        else:
+            last_day = last_ts.date()
+            day_df = data[_dt.dt.date == last_day].copy()
+
+            # 🔥 Headline: "On Feb 21, I logged 3 activities across 3 sports: ..."
+            day_df["Sport"] = day_df["Sport"].fillna("Other").astype(str)
+
+            n_acts = int(len(day_df))
+            n_sports = int(day_df["Sport"].nunique())
+            sports_list = day_df["Sport"].value_counts().index.tolist()
+
+            # nice emoji mapping
+            sport_emoji = {
+                "Cycling": "🚴",
+                "Running": "🏃",
+                "Walking": "🚶",
+                "Workout": "🧘",
+                "Swimming": "🏊",
+                "Other": "⭐",
+            }
+
+            sport_str = ", ".join([f"{sport_emoji.get(s, '⭐')} {s}" for s in sports_list])
+
+            st.markdown(
+                f"🔥 On **{last_day:%b %d, %Y}**, I logged **{n_acts}** activities across **{n_sports}** sports: {sport_str}"
+            )
+
+            
+
+            # Clean numeric fields (safe)
+            day_df["Distance"] = pd.to_numeric(day_df["Distance"], errors="coerce").fillna(0.0)
+            day_df["Moving Time"] = pd.to_numeric(day_df["Moving Time"], errors="coerce").fillna(0.0)
+
+            # Summary by sport
+            summary = (
+                day_df.groupby("Sport")
+                .agg(
+                    Activities=("Activity ID", "count"),
+                    Distance_km=("Distance", "sum"),
+                    Time_s=("Moving Time", "sum"),
+                )
+                .reset_index()
+                .sort_values(["Activities", "Distance_km"], ascending=False)
+            )
+
+            summary["Distance"] = summary["Distance_km"].apply(lambda x: f"{x:,.1f} km" if x > 0 else "—")
+            summary["Time"] = summary["Time_s"].apply(_dur_str)
+
+            #st.markdown("**What I did today:**")
+            st.dataframe(
+                summary[["Sport", "Activities", "Distance", "Time"]],
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.success(f"✅ Latest activity date in this app: **{last_day}**")
+            
+            # with st.expander("🔎 See activity names (that day)", expanded=False):
+            #     tmp = day_df[["Activity Name", "Sport", "Distance", "Moving Time"]].copy()
+            #     tmp["Distance (km)"] = tmp["Distance"].round(1)
+            #     tmp["Time"] = tmp["Moving Time"].apply(_dur_str)
+
+            #     st.dataframe(
+            #         tmp[["Activity Name", "Sport", "Distance (km)", "Time"]],
+            #         use_container_width=True,
+            #         hide_index=True,
+            #     )
+
+            # Optional: show cache freshness (uses your existing cache_age variables)
+            # try:
+            #     if cache_age is not None:
+            #         st.caption(
+            #             f"🕒 Cache age at load time: {cache_age:.1f} hours "
+            #             f"(auto-refresh triggers if > {CACHE_MAX_AGE_HOURS} hours)."
+            #         )
+            # except Exception:
+            #     pass
+
         st.markdown("</div>", unsafe_allow_html=True)
 
     with col2:
@@ -1416,7 +1760,10 @@ Most importantly, this journey transformed me into a more self-sustainable perso
 What started as a health decision became a life philosophy:  
 **move forward, connect deeply, and grow stronger — inside and out.**
 
-📌 According to my Strava history, I have logged activities on  **{total_active_days:,} different days (~{active_years:.1f} years of movement)**, with a longest streak of **{longest_streak:,} consecutive active days (~{streak_years:.1f} years without a break)** — cycling, running, walking, yoga, and more. That discipline and commitment didn’t just change my body — it transformed my resilience, my confidence, and my mindset. What once scared me now feels like second nature — just go and get it.
+📌 According to my Strava history, I have logged activities on  
+📌 According to my Strava history, I have been active for <span class="num-highlight"><span class="num-highlight">{total_active_days:,}</span> days (~<span class="num-highlight">{active_years:.1f}</span> years of movement).
+
+with a longest streak of <span class="num-highlight">{longest_streak:,}</span> consecutive active days (~<span class="num-highlight">{streak_years:.1f}</span> years without a break) — be it cycling, running, walking, yoga, or anyting. That discipline and commitment didn’t just change my body — it transformed my resilience, my confidence, and my mindset. What once scared me now feels like second nature — just go and get it.
 
 ---
 
@@ -1441,16 +1788,77 @@ This dashboard is built to show the **life & story behind the numbers** — not 
 
 Enjoy the journey — numbers tell *what*, stories tell *why*, and together they show *how far you’ve come*.
 
-        """
+        """,
+        unsafe_allow_html=True
     )
     st.info("Tip: Start with Steps → Cycling → Running → Walking → Yoga → Swimming → All Sports ✅")
 
 
 with tab_steps:
     st.subheader("👣 Steps (data from Garmin) – Story on a Globe")
-    repo_root = Path(__file__).resolve().parent
-    json_path = repo_root / "App_Data" / "demo_garmin_steps_summary.json"
-    steps_summary = load_steps_summary(json_path)
+
+    # -------------------------------
+    # Repo-safe Steps JSON locator
+    # -------------------------------
+    from pathlib import Path
+    import datetime as dt
+
+    def _find_repo_root(start: Path) -> Path | None:
+        cur = start.resolve()
+        for _ in range(10):  # climb up to 10 levels
+            if (cur / ".git").exists():
+                return cur
+            cur = cur.parent
+        return None
+
+    import os   # ← make sure this exists at top
+
+    def _find_steps_json() -> Path:
+
+        # ---------------------------------
+        # 0) ENVIRONMENT VARIABLE OVERRIDE
+        # ---------------------------------
+        override = os.environ.get("STEPS_JSON_PATH", "").strip()
+        if override:
+            p0 = Path(override)
+            if p0.exists():
+                return p0
+
+        # ---------------------------------
+        # Normal repo detection
+        # ---------------------------------
+        here = Path(__file__).resolve().parent
+        repo = _find_repo_root(here)
+
+        # 1) If repo root found, prefer repo/data
+        if repo:
+            p = repo / "data" / "demo_garmin_steps_summary.json"
+            if p.exists():
+                return p
+
+        # 2) fallback: next to script (your earlier logic)
+        p1 = here / "data" / "demo_garmin_steps_summary.json"
+        if p1.exists():
+            return p1
+
+        p2 = here / "App_Data" / "demo_garmin_steps_summary.json"
+        if p2.exists():
+            return p2
+
+        return (repo / "data" / "demo_garmin_steps_summary.json") if repo else p1
+
+    steps_json_path = _find_steps_json()
+
+    cache_key = _steps_summary_cache_key(steps_json_path)
+    steps_summary = load_steps_summary(str(steps_json_path), cache_key)
+
+    if steps_json_path.exists():
+        st.caption(
+            f"📌 Steps file: {steps_json_path.name} • "
+            f"Last updated: "
+            f"{dt.datetime.fromtimestamp(steps_json_path.stat().st_mtime).strftime('%d %b %Y, %I:%M %p')}"
+        )
+
 
     # st.write("DEBUG total_days:", steps_summary.get("total_days") if steps_summary else None)
     # st.write("DEBUG range:", steps_summary.get("range_start"), steps_summary.get("range_end"))
@@ -1459,10 +1867,11 @@ with tab_steps:
     # if json_path.exists():
     #     st.caption(f"DEBUG last modified: {dt.datetime.fromtimestamp(json_path.stat().st_mtime)}")
 
-
+    # st.caption(f"DEBUG steps json path: {json_path}")
+    # st.caption(f"DEBUG exists: {json_path.exists()}")
 
     if not steps_summary:
-        st.info("Steps summary file not found yet. Expected: App_Data/demo_garmin_steps_summary.json")
+        st.error(f"Steps summary file not found/readable at: {steps_json_path}")
     else:
         total_steps = int(steps_summary.get("total_steps", 0))
         dist_km = float(steps_summary.get("distance_from_steps_km_estimated", 0.0))
@@ -1572,7 +1981,7 @@ with tab_steps:
             <div class="steps-ring-card">
             <div class="steps-ring-wrap">
                 <div style="position:relative;">
-                <div class="steps-ring" style="--p:{lap_pct}%"></div>
+                <div class="steps-ring" style="background: conic-gradient(#f59e0b 0% {lap_pct}%, rgba(49, 51, 63, 0.10) {lap_pct}% 100%);"></div>
                 <div class="steps-ring-text"
                     style="position:absolute; inset:0; display:grid; place-items:center;">
                     {lap_pct}%
@@ -1582,7 +1991,7 @@ with tab_steps:
                 <div>
                 <div style="font-weight:800; font-size:1.05rem;">Walking Progress</div>
                 <div class="steps-ring-sub">
-                    You’ve completed <b>{lap_pct}%</b> of one Earth round
+                    I have completed <b>{lap_pct}%</b> of one Earth round
                 </div>
                 </div>
             </div>
@@ -1647,13 +2056,112 @@ with tab_steps:
 
 
 with tab_all:
-    st.subheader("All Sports – Overview")
-    generic_time_series(df, "All Sports")
-    distance_distribution(df, "All Sports")
+    
+    soft_divider()   # ✅ ADD THIS LINE
+    st.subheader("📊 All Sports – Overview (All Years)")
+
+    # ✅ Always use full dataset
+    all_df = df_all_years.copy()
+
+    # =====================================================
+    # 🏆 EXECUTIVE INSIGHTS (NEW SECTION)
+    # =====================================================
+    if not all_df.empty:
+
+        # ---- Lifetime distance ----
+        lifetime_km = all_df["Distance"].sum()
+
+        # ---- Best Year ----
+        yearly = (
+            all_df.groupby("Year")["Distance"]
+            .sum()
+            .sort_values(ascending=False)
+        )
+
+        best_year = int(yearly.index[0])
+        best_year_km = yearly.iloc[0]
+
+        # ---- Most Active Month ----
+        monthly = (
+            all_df.groupby("MonthPeriod")["Distance"]
+            .sum()
+            .sort_values(ascending=False)
+        )
+
+        best_month = (
+            monthly.index[0]
+            .to_timestamp()
+            .strftime("%b-%Y")
+        )
+        best_month_km = monthly.iloc[0]
+
+        # ---- Journey Since badge ----
+        first_year = int(all_df["Year"].min())
+        last_year = int(all_df["Year"].max())
+        years_active = (last_year - first_year + 1)
+
+        st.markdown(
+            f"🧭 **Active Since {first_year}**  •  **{years_active} years** of continuous movement and still counting...."
+        )
+
+        # ---- Display cards ----
+        c1, c2, c3 = st.columns(3)
+
+        with c1:
+            st.metric("🏆 Best Year", f"{best_year}")
+            st.caption(f"{best_year_km:,.0f} km covered")
+
+        with c2:
+            st.metric("🔥 Most Active Month", best_month)
+            st.caption(f"{best_month_km:,.0f} km in that month")
+
+        with c3:
+            st.metric("🚀 Lifetime Distance", f"{lifetime_km:,.0f} km")
+            st.caption("Across all recorded activities")
+        
 
     st.divider()
-    st.caption("Export the currently filtered dataset:")
-    download_button(df, "⬇️ Download CSV", "strava_filtered.csv")
+
+    # =====================================================
+    # 🔥 CONSISTENCY INSIGHTS
+    # =====================================================
+
+    years_available = all_df["Year"].nunique()
+    avg_km_per_year = lifetime_km / years_available if years_available > 0 else 0
+
+    c4, c5, c6 = st.columns(3)
+
+    with c4:
+        st.metric(
+            "🔥 Active Days",
+            f"{total_active_days:,}"
+        )
+        st.caption(f"~{active_years:.1f} years of movement")
+
+    with c5:
+        st.metric(
+            "🧭 Longest Streak",
+            f"{longest_streak:,} days"
+        )
+        st.caption(f"~{streak_years:.1f} years without break")
+
+    with c6:
+        st.metric(
+            "📈 Avg km / Year",
+            f"{avg_km_per_year:,.0f} km"
+        )
+        st.caption("Across entire activity history")
+
+    st.divider()
+
+    st.info("Note: All Sports tab always shows **All Years** (Year filter applies only to sport tabs KPIs).")
+
+    generic_time_series(all_df, "All Sports", key_prefix="all_sports_all_years")
+    distance_distribution(all_df, "All Sports")
+
+    st.divider()
+    st.caption("Export the all-years dataset used in this tab:")
+    download_button(all_df, "⬇️ Download CSV (All Years)", "strava_all_years.csv")
 
 
 with tab_cyc:
@@ -1690,19 +2198,46 @@ with tab_cyc:
         ov = _cyc_stats(cyc_overall)
         sy = _cyc_stats(cyc_selected_year)
 
-        st.markdown("### 🌐 Overall Cycling (All Years) statistics - Both commutes and non-commutes")
-        o1, o2, o3, o4 = st.columns(4)
-        o1.metric("Rides", f"{ov['rides']:,}")
-        o2.metric("Distance", f"{ov['km']:,.0f} km")
-        o3.metric("Time", f"{ov['hours']:,.0f} hrs")
-        o4.metric("Commutes", f"{ov['commute_rides']:,}")
+        # =========================
+        # Cycling KPI sections (WITH outer frame + inner KPI cards)
+        # =========================
 
-        st.markdown(f"### 📅 Cycling in {year_label}")
-        y1, y2, y3, y4 = st.columns(4)
-        y1.metric("Rides", f"{sy['rides']:,}")
-        y2.metric("Distance", f"{sy['km']:,.0f} km")
-        y3.metric("Time", f"{sy['hours']:,.0f} hrs")
-        y4.metric("Commute share", f"{sy['commute_share']:,.0f}%")
+        # --- Overall Cycling (All Years) ---
+        try:
+            with st.container(border=False):
+                st.markdown("### 🌐 Overall Cycling (All Years) statistics - Both commutes and non-commutes")
+                o1, o2, o3, o4 = st.columns(4)
+                with o1: kpi_card("Rides", f"{ov['rides']:,}")
+                with o2: kpi_card("Distance", f"{ov['km']:,.0f} km")
+                with o3: kpi_card("Time", f"{ov['hours']:,.0f} hrs")
+                with o4: kpi_card("Commutes", f"{ov['commute_rides']:,}")
+        except TypeError:
+            # Fallback (older Streamlit without border=True)
+            st.markdown("### 🌐 Overall Cycling (All Years) statistics - Both commutes and non-commutes")
+            o1, o2, o3, o4 = st.columns(4)
+            with o1: kpi_card("Rides", f"{ov['rides']:,}")
+            with o2: kpi_card("Distance", f"{ov['km']:,.0f} km")
+            with o3: kpi_card("Time", f"{ov['hours']:,.0f} hrs")
+            with o4: kpi_card("Commutes", f"{ov['commute_rides']:,}")
+
+        soft_divider()
+        
+        # --- Cycling in selected year ---
+        try:
+            with st.container(border=False):
+                st.markdown(f"### 📅 Cycling in {year_label}")
+                y1, y2, y3, y4 = st.columns(4)
+                with y1: kpi_card("Rides", f"{sy['rides']:,}")
+                with y2: kpi_card("Distance", f"{sy['km']:,.0f} km")
+                with y3: kpi_card("Time", f"{sy['hours']:,.0f} hrs")
+                with y4: kpi_card("Commute share", f"{sy['commute_share']:.0f}%")
+        except TypeError:
+            st.markdown(f"### 📅 Cycling in {year_label}")
+            y1, y2, y3, y4 = st.columns(4)
+            with y1: kpi_card("Rides", f"{sy['rides']:,}")
+            with y2: kpi_card("Distance", f"{sy['km']:,.0f} km")
+            with y3: kpi_card("Time", f"{sy['hours']:,.0f} hrs")
+            with y4: kpi_card("Commute share", f"{sy['commute_share']:.0f}%")
 
 
         # --- NEW: Cycling globe (different from Steps globe) ---
@@ -1890,6 +2425,8 @@ with tab_run:
         with c8: kpi_card("No of 15K Runs", f"{A['k15']:,}")
         with c9: kpi_card("No of Half Marathons", f"{A['hm']:,}")
 
+        soft_divider()
+
         # ---- UI: Selected Year ----
         st.markdown(f"#### 🗓️ Running in {year_label}")
         Y = _running_kpis(run_year)
@@ -1907,6 +2444,7 @@ with tab_run:
         with c8: kpi_card("No of 15K Runs", f"{Y['k15']:,}")
         with c9: kpi_card("No of Half Marathons", f"{Y['hm']:,}")
 
+        
         # ---- keep your existing section after this ----
         st.subheader("Running – Quick View (current filters)")
         run = df[df["Sport"] == "Running"].copy()
@@ -2050,6 +2588,8 @@ with tab_walk:
     with c8: st.write("")  # spacer
     with c9: st.write("")  # spacer
 
+    soft_divider()
+
     # ---- UI: Selected Year ----
     st.markdown(f"#### 🗓️ Walking in {year_label}")
     Y = _walking_kpis(walk_year)
@@ -2105,6 +2645,7 @@ with tab_walk:
             unsafe_allow_html=True,
         )
     
+    soft_divider()   # ✅ ADD THIS LINE
     st.subheader("Walking – Quick View (current filters)")
     # ---------- Charts (overall only) ----------
     if walk_charts.empty:
@@ -2119,6 +2660,7 @@ with tab_walk:
 
 
 with tab_swim:
+    soft_divider()   # ✅ ADD THIS LINE
     st.subheader("🏊 Swimming – Quick View")
 
     # --- Overall (All Years) + Selected Year (Swimming) ---
@@ -2144,6 +2686,8 @@ with tab_swim:
     with c3: kpi_card("Total Time", _dur_str(A["sec"]) if A["sec"] else "—")
     with c4: kpi_card("Avg Distance / Swim", f"{A['avg_km']:,.2f} km" if A["avg_km"] else "—")
 
+    soft_divider()
+    
     # ---- UI: Selected Year ----
     st.markdown(f"#### 🗓️ Swimming in {year_label}")
     Y = _swim_kpis(swim_year)
@@ -2193,6 +2737,7 @@ with tab_swim:
 
 
 with tab_yoga:
+    soft_divider()   # ✅ ADD THIS LINE
     st.subheader("➕ Yoga/Strength training – Quick View")
 
     # --- Overall (All Years) + Selected Year (Workout/Yoga/Strength) ---
@@ -2214,6 +2759,8 @@ with tab_yoga:
     with c1: kpi_card("Sessions", f"{A['sessions']:,}")
     with c2: kpi_card("Total Time", _dur_str(A["sec"]) if A["sec"] else "—")
     with c3: kpi_card("Avg Time / Session", _dur_str(A["avg_sec"]) if A["avg_sec"] else "—")
+
+    soft_divider()
 
     st.markdown(f"#### 🗓️ Yoga/Strength training in {year_label}")
     Y = _workout_kpis(oth_year)

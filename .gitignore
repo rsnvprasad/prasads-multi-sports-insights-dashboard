@@ -180,16 +180,18 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-App_Data/*.parquet
-App_Data/*.json
-App_Data/*.csv
-App_Data/__pycache__/
+# ---- Runtime / local datasets (do not commit) ----
+/data/*
+!/data/demo_garmin_steps_summary.json
 
-# Local runtime / personal datasets (do not commit)
-data/
-*.parquet
-*.csv
-*.json
-*.zip
+# If you want to keep the folder even when empty (optional)
+/data/.gitkeep
 
-.streamlit/secrets.toml
+# Never commit Streamlit secrets
+/.streamlit/secrets.toml
+
+# App_Data is always local artifacts (keep ignored)
+/App_Data/*.parquet
+/App_Data/*.json
+/App_Data/*.csv
+/App_Data/__pycache__/

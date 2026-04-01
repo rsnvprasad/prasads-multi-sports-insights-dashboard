@@ -45,13 +45,16 @@ def _html(s: str) -> str:
 def _robust_parse_datetime(val: str) -> pd.Timestamp:
     if pd.isna(val):
         return pd.NaT
+
     s = str(val).strip()
 
+    # First: standard parser for machine-generated dates
     try:
-        return pd.to_datetime(s, errors="raise", infer_datetime_format=True, utc=False)
+        return pd.to_datetime(s, errors="raise", utc=False)
     except Exception:
         pass
 
+    # Then: explicit known human-readable formats
     for fmt in (
         "%b %d, %Y, %I:%M:%S %p",
         "%b %d, %Y %I:%M:%S %p",
@@ -63,7 +66,8 @@ def _robust_parse_datetime(val: str) -> pd.Timestamp:
         except Exception:
             continue
 
-    return pd.to_datetime(s, errors="coerce", dayfirst=True, utc=False)
+    # Final fallback: NO dayfirst
+    return pd.to_datetime(s, errors="coerce", utc=False)
 
 
 def _to_numeric_clean(series: pd.Series) -> pd.Series:

@@ -1501,30 +1501,6 @@ if raw is None or raw.empty:
 
 data = parse_activities_cached(raw)
 
-with st.sidebar.expander("🧪 Date diagnostics", expanded=False):
-    bad_future = data[pd.to_datetime(data["Activity Date"], errors="coerce") > pd.Timestamp.now().normalize()].copy()
-
-    st.write("Parsed max Activity Date:", pd.to_datetime(data["Activity Date"], errors="coerce").max())
-
-    if not bad_future.empty:
-        st.warning(f"Found {len(bad_future)} future-dated activities")
-        st.dataframe(
-            bad_future[["Activity Date", "Activity Name", "Activity Type", "Distance"]],
-            use_container_width=True,
-            hide_index=True,
-        )
-
-# =========================
-# Clean parsed dates once globally
-# =========================
-data["Activity Date"] = pd.to_datetime(data["Activity Date"], errors="coerce")
-
-today = pd.Timestamp.now().normalize()
-
-# Keep only valid, non-future activity dates
-data = data[data["Activity Date"].notna()].copy()
-data = data[data["Activity Date"].dt.normalize() <= today].copy()
-
 # =========================
 # Diagnostics (helps catch missing activities / caching issues)
 # =========================
@@ -1670,15 +1646,14 @@ with tab_about:
         st.subheader("📅 Latest activity(-ies) in my day to day journey")
 
         # Activity Date is already parsed; still keep robust conversion
-        about_data = data.copy()
-        _dt = about_data["Activity Date"]
+        _dt = pd.to_datetime(data["Activity Date"], errors="coerce")
         last_ts = _dt.max()
 
         if pd.isna(last_ts):
             st.info("No valid activity dates found yet in the dataset.")
         else:
             last_day = last_ts.date()
-            day_df = about_data[_dt.dt.date == last_day].copy()
+            day_df = data[_dt.dt.date == last_day].copy()
 
             # 🔥 Headline: "On Feb 21, I logged 3 activities across 3 sports: ..."
             day_df["Sport"] = day_df["Sport"].fillna("Other").astype(str)

@@ -1794,7 +1794,6 @@ Most importantly, this journey transformed me into a more self-sustainable perso
 What started as a health decision became a life philosophy:  
 **move forward, connect deeply, and grow stronger — inside and out.**
 
-📌 According to my Strava history, I have logged activities on  
 📌 According to my Strava history, I have been active for <span class="num-highlight"><span class="num-highlight">{total_active_days:,}</span> days (~<span class="num-highlight">{active_years:.1f}</span> years of movement).
 
 with a longest streak of <span class="num-highlight">{longest_streak:,}</span> consecutive active days (~<span class="num-highlight">{streak_years:.1f}</span> years without a break) — be it cycling, running, walking, yoga, or anyting. That discipline and commitment didn’t just change my body — it transformed my resilience, my confidence, and my mindset. What once scared me now feels like second nature — just go and get it.

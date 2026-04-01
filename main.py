@@ -70,6 +70,7 @@ def _robust_parse_datetime(val: str) -> pd.Timestamp:
     return pd.to_datetime(s, errors="coerce", utc=False)
 
 
+
 def _to_numeric_clean(series: pd.Series) -> pd.Series:
     return pd.to_numeric(
         series.astype(str)

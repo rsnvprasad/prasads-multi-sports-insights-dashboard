@@ -1502,9 +1502,12 @@ if raw is None or raw.empty:
 data = parse_activities_cached(raw)
 
 with st.sidebar.expander("🧪 Date diagnostics", expanded=False):
-    bad_future = data[pd.to_datetime(data["Activity Date"], errors="coerce") > pd.Timestamp.now().normalize()].copy()
+    parsed_dates = pd.to_datetime(data["Activity Date"], errors="coerce", utc=True)
+    today_utc = pd.Timestamp.now(tz="UTC").normalize()
 
-    st.write("Parsed max Activity Date:", pd.to_datetime(data["Activity Date"], errors="coerce").max())
+    bad_future = data[parsed_dates > today_utc].copy()
+
+    st.write("Parsed max Activity Date:", parsed_dates.max())
 
     if not bad_future.empty:
         st.warning(f"Found {len(bad_future)} future-dated activities")
@@ -1517,11 +1520,10 @@ with st.sidebar.expander("🧪 Date diagnostics", expanded=False):
 # =========================
 # Clean parsed dates once globally
 # =========================
-data["Activity Date"] = pd.to_datetime(data["Activity Date"], errors="coerce")
+data["Activity Date"] = pd.to_datetime(data["Activity Date"], errors="coerce", utc=True)
 
-today = pd.Timestamp.now().normalize()
+today = pd.Timestamp.now(tz="UTC").normalize()
 
-# Keep only valid, non-future activity dates
 data = data[data["Activity Date"].notna()].copy()
 data = data[data["Activity Date"].dt.normalize() <= today].copy()
 

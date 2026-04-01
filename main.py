@@ -1514,7 +1514,9 @@ with st.sidebar.expander("🧪 Date diagnostics", expanded=False):
 
     st.write("Parsed max Activity Date:", parsed_dates.max())
 
-    if not bad_future.empty:
+    if bad_future.empty:
+        st.success("No future-dated activities found")
+    else:
         st.warning(f"Found {len(bad_future)} future-dated activities")
         st.dataframe(
             bad_future[["Activity Date", "Activity Name", "Activity Type", "Distance"]],

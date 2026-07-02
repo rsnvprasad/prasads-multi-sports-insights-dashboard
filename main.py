@@ -2286,7 +2286,7 @@ with tab_cyc:
             commute_km = float(dfx.loc[dfx["Commute"] == True, "Distance"].sum() or 0.0)
             commute_share = (commute_km / km * 100.0) if km > 0 else 0.0
             avg_ride_km = (km / rides) if rides > 0 else 0.0
-            return dict(rides=rides, km=km, hours=hours, commute_rides=commute_rides, commute_share=commute_share)
+            return dict(rides=rides, km=km, hours=hours, commute_rides=commute_rides, commute_share=commute_share, avg_ride_km=avg_ride_km)
 
         ov = _cyc_stats(cyc_overall)
         sy = _cyc_stats(cyc_selected_year)

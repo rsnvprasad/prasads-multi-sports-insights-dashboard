@@ -216,6 +216,14 @@ def fetch_strava_activities_json(
             params=params,
             timeout=15,
         )
+        print("="*60)
+        print("ACTIVITY REQUEST")
+        print("Page       :", page)
+        print("Status Code:", r.status_code)
+        print("Headers    :", dict(r.headers))
+        print("Response   :", r.text[:1000])
+        print("="*60)
+
         r.raise_for_status()
         acts = r.json()
         if not acts:
@@ -1517,9 +1525,21 @@ if ("raw_activities_df" not in st.session_state) or refresh_mode:
         st.session_state["raw_activities_df"] = fresh_df
 
     except Exception as e:
+
+        import traceback
+
+        print("="*80)
+        print("STRAVA FETCH FAILED")
+        print(traceback.format_exc())
+        print("="*80)
         fallback_df = _load_strava_parquet()
         if fallback_df is not None and not fallback_df.empty:
-            st.warning("Strava API fetch failed. Loaded cached parquet data instead.")
+            #st.warning("Strava API fetch failed. Loaded cached parquet data instead.")
+            st.error(f"Strava API Error:\n\n{e}")
+
+            st.warning(
+                "Loaded cached parquet data instead."
+            )
             st.session_state["raw_activities_df"] = fallback_df
         else:
             st.error(f"Strava API fetch failed and no parquet cache found.\n\nError: {e}")

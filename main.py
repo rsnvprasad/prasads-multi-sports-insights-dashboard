@@ -1529,7 +1529,7 @@ if ("raw_activities_df" not in st.session_state) or refresh_mode:
         import traceback
 
         print("="*80)
-        print("STRAVA FETCH FAILED")
+        print("STRAVA FETCH FAILED. ⚠️ Live synchronization unavailable.")
         print(traceback.format_exc())
         print("="*80)
         fallback_df = _load_strava_parquet()
@@ -1871,6 +1871,14 @@ Enjoy the journey — numbers tell *what*, stories tell *why*, and together they
         unsafe_allow_html=True
     )
     st.info("Tip: Start with Steps → Cycling → Running → Walking → Yoga → Swimming → All Sports ✅")
+
+    st.markdown("---")
+
+    st.caption(
+        "⚙️ **Built with:** "
+        "Strava API (OAuth 2.0) • Garmin Connect Data Export • "
+        "Local Parquet Cache • Streamlit • Pandas • NumPy • Plotly"
+    )
 
 
 with tab_steps:

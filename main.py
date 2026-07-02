@@ -2299,7 +2299,7 @@ with tab_cyc:
         try:
             with st.container(border=False):
                 st.markdown("### 🌐 Overall Cycling (All Years) statistics - Both commutes and non-commutes")
-                o1, o2, o3, o4, o5, o6 = st.columns(5)
+                o1, o2, o3, o4, o5, o6 = st.columns(6)
                 with o1: kpi_card("Rides", f"{ov['rides']:,}")
                 with o2: kpi_card("Distance", f"{ov['km']:,.0f} km")
                 with o3: kpi_card("Time", f"{ov['hours']:,.0f} hrs")
@@ -2325,7 +2325,7 @@ with tab_cyc:
         try:
             with st.container(border=False):
                 st.markdown(f"### 📅 Cycling in {year_label}")
-                y1, y2, y3, y4, y5, y6 = st.columns(5)
+                y1, y2, y3, y4, y5, y6 = st.columns(6)
                 with y1: kpi_card("Rides", f"{sy['rides']:,}")
                 with y2: kpi_card("Distance", f"{sy['km']:,.0f} km")
                 with y3: kpi_card("Time", f"{sy['hours']:,.0f} hrs")

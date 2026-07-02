@@ -2284,9 +2284,10 @@ with tab_cyc:
             hours = float((dfx["Moving Time"].sum() or 0.0) / 3600.0)
             commute_rides = int((dfx["Commute"] == True).sum())
             commute_km = float(dfx.loc[dfx["Commute"] == True, "Distance"].sum() or 0.0)
-            commute_share = (commute_km / km * 100.0) if km > 0 else 0.0
+            commute_rides_share = (commute_rides / rides * 100.0) if rides > 0 else 0.0
+            commute_distance_share = (commute_km / km * 100.0) if km > 0 else 0.0
             avg_ride_km = (km / rides) if rides > 0 else 0.0
-            return dict(rides=rides, km=km, hours=hours, commute_rides=commute_rides, commute_share=commute_share, avg_ride_km=avg_ride_km)
+            return dict(rides=rides, km=km, hours=hours, commute_rides=commute_rides, commute_rides_share=commute_rides_share, commute_distance_share=commute_distance_share, avg_ride_km=avg_ride_km)
 
         ov = _cyc_stats(cyc_overall)
         sy = _cyc_stats(cyc_selected_year)
@@ -2299,24 +2300,30 @@ with tab_cyc:
         try:
             with st.container(border=False):
                 st.markdown("### 🌐 Overall Cycling (All Years) statistics - Both commutes and non-commutes")
-                o1, o2, o3, o4, o5, o6 = st.columns(6)
+                o1, o2, o3, o4 = st.columns(4)
                 with o1: kpi_card("Rides", f"{ov['rides']:,}")
                 with o2: kpi_card("Distance", f"{ov['km']:,.0f} km")
                 with o3: kpi_card("Time", f"{ov['hours']:,.0f} hrs")
                 with o4: kpi_card("Avg. Distance/Ride", f"{ov['avg_ride_km']:,.0f} km")
+
+                o5, o6, o7 = st.columns(3)
                 with o5: kpi_card("Commutes", f"{ov['commute_rides']:,}")
-                with o6: kpi_card("Commute share", f"{ov['commute_share']:.0f}%")
+                with o6: kpi_card("Commute Rides Share", f"{ov['commute_rides_share']:.0f}%")
+                with o7: kpi_card("Commute Distance Share", f"{ov['commute_distance_share']:.0f}%")
 
         except TypeError:
             # Fallback (older Streamlit without border=True)
             st.markdown("### 🌐 Overall Cycling (All Years) statistics - Both commutes and non-commutes")
-            o1, o2, o3, o4, o5, o6 = st.columns(6)
+            o1, o2, o3, o4, o5, o6 = st.columns(4)
             with o1: kpi_card("Rides", f"{ov['rides']:,}")
             with o2: kpi_card("Distance", f"{ov['km']:,.0f} km")
             with o3: kpi_card("Time", f"{ov['hours']:,.0f} hrs")
             with o4: kpi_card("Avg. Distance/Ride", f"{ov['avg_ride_km']:,.0f} km")
+            
+            o5, o6, o7 = st.columns(3)
             with o5: kpi_card("Commutes", f"{ov['commute_rides']:,}")
-            with o6: kpi_card("Commute share", f"{ov['commute_share']:.0f}%")
+            with o6: kpi_card("Commute Rides Share", f"{ov['commute_rides_share']:.0f}%")
+            with o7: kpi_card("Commute Distance Share", f"{ov['commute_distance_share']:.0f}%")
 
 
         soft_divider()
@@ -2325,23 +2332,29 @@ with tab_cyc:
         try:
             with st.container(border=False):
                 st.markdown(f"### 📅 Cycling in {year_label}")
-                y1, y2, y3, y4, y5, y6 = st.columns(6)
+                y1, y2, y3, y4 = st.columns(4)
                 with y1: kpi_card("Rides", f"{sy['rides']:,}")
                 with y2: kpi_card("Distance", f"{sy['km']:,.0f} km")
                 with y3: kpi_card("Time", f"{sy['hours']:,.0f} hrs")
                 with y4: kpi_card("Avg. Distance/Ride", f"{sy['avg_ride_km']:,.0f} km")
-                with y6: kpi_card("Commute share", f"{sy['commute_share']:.0f}%")
+
+                y5, y6, y7 = st.columns(3)
                 with y5: kpi_card("Commutes", f"{sy['commute_rides']:,}")
+                with y6: kpi_card("Commute Rides Share", f"{sy['commute_rides_share']:.0f}%")
+                with y7: kpi_card("Commute Distance Share", f"{sy['commute_distance_share']:.0f}%")
 
         except TypeError:
             st.markdown(f"### 📅 Cycling in {year_label}")
-            y1, y2, y3, y4, y5, y6 = st.columns(6)
+            y1, y2, y3, y4 = st.columns(4)
             with y1: kpi_card("Rides", f"{sy['rides']:,}")
             with y2: kpi_card("Distance", f"{sy['km']:,.0f} km")
             with y3: kpi_card("Time", f"{sy['hours']:,.0f} hrs")
             with y4: kpi_card("Avg. Distance/Ride", f"{sy['avg_ride_km']:,.0f} km")
-            with y6: kpi_card("Commute share", f"{sy['commute_share']:.0f}%")
+                
+            y5, y6, y7 = st.columns(3)
             with y5: kpi_card("Commutes", f"{sy['commute_rides']:,}")
+            with y6: kpi_card("Commute Rides Share", f"{sy['commute_rides_share']:.0f}%")
+            with y7: kpi_card("Commute Distance Share", f"{sy['commute_distance_share']:.0f}%")
 
 
 
@@ -2365,7 +2378,7 @@ with tab_cyc:
             except Exception:
                 commute_km = 0.0
 
-            commute_share = (commute_km / total_km * 100.0) if total_km > 0 else 0.0
+            commute_distance_share = (commute_km / total_km * 100.0) if total_km > 0 else 0.0
 
             # k1, k2, k3 = st.columns(3)
             # with k1:

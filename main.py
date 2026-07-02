@@ -1938,11 +1938,11 @@ with tab_steps:
 
     cache_key = _steps_summary_cache_key(steps_json_path)
     steps_summary = load_steps_summary(str(steps_json_path), cache_key)
-    st.caption(f"DEBUG steps path: {steps_json_path}")
-    st.caption(f"DEBUG cache key: {cache_key}")
-    st.write("DEBUG total_steps:", steps_summary.get("total_steps") if steps_summary else None)
-    st.write("DEBUG dist_km:", steps_summary.get("distance_from_steps_km_estimated") if steps_summary else None)
-    st.write("DEBUG current streak:", steps_summary.get("current_10k_streak_days") if steps_summary else None)
+    # st.caption(f"DEBUG steps path: {steps_json_path}")
+    # st.caption(f"DEBUG cache key: {cache_key}")
+    # st.write("DEBUG total_steps:", steps_summary.get("total_steps") if steps_summary else None)
+    # st.write("DEBUG dist_km:", steps_summary.get("distance_from_steps_km_estimated") if steps_summary else None)
+    # st.write("DEBUG current streak:", steps_summary.get("current_10k_streak_days") if steps_summary else None)
 
     if steps_json_path.exists():
         st.caption(

@@ -2285,6 +2285,7 @@ with tab_cyc:
             commute_rides = int((dfx["Commute"] == True).sum())
             commute_km = float(dfx.loc[dfx["Commute"] == True, "Distance"].sum() or 0.0)
             commute_share = (commute_km / km * 100.0) if km > 0 else 0.0
+            avg_ride_km = (km / rides) if rides > 0 else 0.0
             return dict(rides=rides, km=km, hours=hours, commute_rides=commute_rides, commute_share=commute_share)
 
         ov = _cyc_stats(cyc_overall)
@@ -2298,19 +2299,23 @@ with tab_cyc:
         try:
             with st.container(border=False):
                 st.markdown("### 🌐 Overall Cycling (All Years) statistics - Both commutes and non-commutes")
-                o1, o2, o3, o4 = st.columns(4)
+                o1, o2, o3, o4, o5 = st.columns(5)
                 with o1: kpi_card("Rides", f"{ov['rides']:,}")
                 with o2: kpi_card("Distance", f"{ov['km']:,.0f} km")
                 with o3: kpi_card("Time", f"{ov['hours']:,.0f} hrs")
-                with o4: kpi_card("Commutes", f"{ov['commute_rides']:,}")
+                with o4: kpi_card("Avg. Distance/Ride", f"{ov['avg_ride_km']:,.0f} km")
+                with o5: kpi_card("Commutes", f"{ov['commute_rides']:,}")
+
         except TypeError:
             # Fallback (older Streamlit without border=True)
             st.markdown("### 🌐 Overall Cycling (All Years) statistics - Both commutes and non-commutes")
-            o1, o2, o3, o4 = st.columns(4)
+            o1, o2, o3, o4, o5 = st.columns(5)
             with o1: kpi_card("Rides", f"{ov['rides']:,}")
             with o2: kpi_card("Distance", f"{ov['km']:,.0f} km")
             with o3: kpi_card("Time", f"{ov['hours']:,.0f} hrs")
-            with o4: kpi_card("Commutes", f"{ov['commute_rides']:,}")
+            with o4: kpi_card("Avg. Distance/Ride", f"{ov['avg_ride_km']:,.0f} km")
+            with o5: kpi_card("Commutes", f"{ov['commute_rides']:,}")
+
 
         soft_divider()
         
@@ -2318,18 +2323,21 @@ with tab_cyc:
         try:
             with st.container(border=False):
                 st.markdown(f"### 📅 Cycling in {year_label}")
-                y1, y2, y3, y4 = st.columns(4)
+                y1, y2, y3, y4, y5 = st.columns(5)
                 with y1: kpi_card("Rides", f"{sy['rides']:,}")
                 with y2: kpi_card("Distance", f"{sy['km']:,.0f} km")
                 with y3: kpi_card("Time", f"{sy['hours']:,.0f} hrs")
-                with y4: kpi_card("Commute share", f"{sy['commute_share']:.0f}%")
+                with y4: kpi_card("Avg. Distance/Ride", f"{sy['avg_ride_km']:,.0f} km")
+                with y5: kpi_card("Commute share", f"{sy['commute_share']:.0f}%")
+
         except TypeError:
             st.markdown(f"### 📅 Cycling in {year_label}")
-            y1, y2, y3, y4 = st.columns(4)
+            y1, y2, y3, y4, y5 = st.columns(5)
             with y1: kpi_card("Rides", f"{sy['rides']:,}")
             with y2: kpi_card("Distance", f"{sy['km']:,.0f} km")
             with y3: kpi_card("Time", f"{sy['hours']:,.0f} hrs")
-            with y4: kpi_card("Commute share", f"{sy['commute_share']:.0f}%")
+            with y4: kpi_card("Avg. Distance/Ride", f"{sy['avg_ride_km']:,.0f} km")
+            with y5: kpi_card("Commute share", f"{sy['commute_share']:.0f}%")
 
 
         # --- NEW: Cycling globe (different from Steps globe) ---

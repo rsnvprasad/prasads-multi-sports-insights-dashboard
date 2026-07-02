@@ -142,9 +142,27 @@ def load_steps_summary(path_str: str, cache_key: float) -> dict | None:
 # =========================
 # Strava API helpers
 # =========================
+# @st.cache_data(show_spinner=False, ttl=900)
+# def get_strava_access_token() -> str:
+#     cfg = st.secrets["strava"]
+#     resp = requests.post(
+#         "https://www.strava.com/oauth/token",
+#         data={
+#             "client_id": cfg["client_id"],
+#             "client_secret": cfg["client_secret"],
+#             "grant_type": "refresh_token",
+#             "refresh_token": cfg["refresh_token"],
+#         },
+#         timeout=15,
+#     )
+#     resp.raise_for_status()
+#     return resp.json()["access_token"]
+
 @st.cache_data(show_spinner=False, ttl=900)
 def get_strava_access_token() -> str:
+
     cfg = st.secrets["strava"]
+
     resp = requests.post(
         "https://www.strava.com/oauth/token",
         data={
@@ -155,7 +173,15 @@ def get_strava_access_token() -> str:
         },
         timeout=15,
     )
+
+    print("="*60)
+    print("TOKEN REQUEST")
+    print("Status Code :", resp.status_code)
+    print("Response    :", resp.text)
+    print("="*60)
+
     resp.raise_for_status()
+
     return resp.json()["access_token"]
 
 
